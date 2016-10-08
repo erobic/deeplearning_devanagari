@@ -11,8 +11,8 @@ import proj_constants
 # Constants used for dealing with the files, matches convert_to_records.
 TRAIN_FILE = 'data/train.tfrecords'
 TEST_FILE = 'data/test.tfrecords'
-BATCH_SIZE = 100
-EPOCHS = 20000
+BATCH_SIZE = 220
+EPOCHS = 300
 LEARNING_RATE = 1e-4
 
 
@@ -66,9 +66,9 @@ def inputs(filename, batch_size):
         # We run this in two threads to avoid being a bottleneck.
         image_batch, label_batch = tf.train.shuffle_batch(
             [image, label], batch_size=batch_size, num_threads=2,
-            capacity=1000 + 3 * batch_size,
+            capacity=500 + 3 * batch_size,
             # Ensures a minimum amount of shuffling of examples.
-            min_after_dequeue=1000)
+            min_after_dequeue=500)
         return image_batch, label_batch
 
 
@@ -92,8 +92,8 @@ def max_pool_2x2(x):
 
 def build_CNN():
     # Input images and labels.
-    x = tf.placeholder(tf.float32, shape=[BATCH_SIZE, proj_constants.WIDTH * proj_constants.HEIGHT])
-    y_ = tf.placeholder(tf.int32, shape=[BATCH_SIZE, proj_constants.CLASSES])
+    x = tf.placeholder(tf.float32, shape=[None, proj_constants.WIDTH * proj_constants.HEIGHT])
+    y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
 
     # Build a CNN
     print("Configuring CNN...")
@@ -156,20 +156,44 @@ def build_CNN():
 
 def show_image(images_eval):
     image = images_eval[20]
-    image = image*255
+    image = image * 255
     image = np.reshape(image, (proj_constants.WIDTH, proj_constants.HEIGHT))
     mpplot.imshow(image, cmap='gray')
     mpplot.show()
+
+
+def get_all_records(FILE):
+    filename_queue = tf.train.string_input_producer([FILE], num_epochs=1)
+    image, label = read_single_example(filename_queue)
+    init_op = tf.group(tf.initialize_all_variables(),
+                       tf.initialize_local_variables())
+    sess = tf.InteractiveSession()
+    sess.run(init_op)
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(coord=coord)
+    images = []
+    labels = []
+    try:
+        while True:
+            images.append(image.eval())
+            labels.append(label.eval())
+    except tf.errors.OutOfRangeError, e:
+        coord.request_stop(e)
+
+    finally:
+        coord.request_stop()
+        coord.join(threads)
+        sess.close()
+    return images, labels
 
 
 def train_CNN():
     """Train data for a number of steps."""
 
     with tf.Graph().as_default():
-
         x, y_, keep_prob, train_step, accuracy = build_CNN()
         images, labels = inputs(TRAIN_FILE, batch_size=BATCH_SIZE)
-        test_images, test_labels = inputs(TEST_FILE, batch_size=BATCH_SIZE)
+        #test_images, test_labels = inputs(TEST_FILE, batch_size=BATCH_SIZE)
 
         print("Starting session...")
         init_op = tf.group(tf.initialize_all_variables(),
@@ -189,27 +213,27 @@ def train_CNN():
             while not coord.should_stop():
                 images_eval = images.eval()
                 labels_eval = labels.eval()
-
+                print(labels_eval)
+                for lbl in labels_eval:
+                    print(np.argmax(lbl))
                 train_step.run(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 0.5})
-                if iter % 1 == 0:
-                    print("Epoch: %d" % iter)
-                    train_accuracy = accuracy.eval(
-                        feed_dict={x: images_eval, y_: labels_eval, keep_prob: 1.0})
+                if iter % 100 == 0:
+                    print("Iteration: %d" % iter)
+                    train_accuracy = accuracy.eval(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 1.0})
                     print("Training accuracy %g" % train_accuracy)
-                    test_accuracy = accuracy.eval(
-                        feed_dict={x: test_images.eval(), y_: test_labels.eval(), keep_prob: 1.0})
-                    print("Test accuracy %g" % test_accuracy)
                 iter += 1
-                #show_image(images_eval)
-                #break
-
         except tf.errors.OutOfRangeError:
             print("Ending training...")
+            print("iter = %d" % iter)
         finally:
+            test_images, test_labels = get_all_records(TEST_FILE)
+            test_accuracy = accuracy.eval(feed_dict={x: test_images, y_: test_labels, keep_prob: 1.0})
+            print("Test accuracy %g" % test_accuracy)
             coord.request_stop()
 
         coord.join(threads)
         sess.close()
+
 #
 #
 # def build_FC():
