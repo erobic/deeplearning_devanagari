@@ -3,6 +3,9 @@ import proj_constants
 import tensorflow as tf
 import numpy as np
 
+MAX_EXAMPLES_PER_FILE = 5
+
+
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
@@ -58,25 +61,28 @@ def datafolder_to_tfrecords(data_folder, output_dir):
     '''Retrieves image and label info from given data_folder and saves them to a tfrecords file'''
     walk = os.walk(data_folder)
     i = 0
-    image_files = []
-    labels = []
     for x in walk:
-        if i!=0:
+        img_cnt = 0
+        image_files = []
+        labels = []
+        if i != 0:
             label_dir = x[0]
             label_name = label_dir.split(os.sep)[2]
-            filename = os.path.join(output_dir, label_name + '.tfrecords')
-            if os.path.exists(filename):
-                print("%s is already present, so skipping to next character" % filename)
-                continue
+            label = proj_constants.get_label_id(label_name)
+            master_filename = os.path.join(output_dir, label_name)
             images = x[2]
             for img in images:
                 image_file = os.path.join(label_dir, img)
-                label = proj_constants.get_label_id(label_name)
                 image_files.append(image_file)
                 labels.append(label)
-            print("Writing to: %s" %filename)
-            examples_to_tfrecords(image_files, labels, filename)
-        i+=1
+                if img_cnt != 0 and ((img_cnt+1) % MAX_EXAMPLES_PER_FILE == 0 or (img_cnt == len(images)-1)):
+                    filename = master_filename+"_"+str(img_cnt+1)+".tfrecords"
+                    print("Writing to: %s" % filename)
+                    examples_to_tfrecords(image_files, labels, filename)
+                    image_files = []
+                    labels = []
+                img_cnt += 1
+        i += 1
 
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
