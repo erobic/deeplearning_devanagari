@@ -156,9 +156,7 @@ def build_CNN():
     print("Defining cost function...")
     # Define cost function
     print("y_")
-    print(y_)
     print("y_conv")
-    print(y_conv)
     cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.cast(y_, tf.float32) * tf.log(y_conv), reduction_indices=[1]))
     # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
     train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
@@ -226,9 +224,6 @@ def train_CNN():
             while not coord.should_stop():
                 images_eval = images.eval()
                 labels_eval = labels.eval()
-                print(labels_eval)
-                for lbl in labels_eval:
-                    print(np.argmax(lbl))
                 train_step.run(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 0.5})
                 if iter % 100 == 0:
                     print("Iteration: %d" % iter)
