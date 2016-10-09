@@ -5,15 +5,27 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as mpplot
+import os
 import matplotlib.image as mpimg
 import proj_constants
 
 # Constants used for dealing with the files, matches convert_to_records.
-TRAIN_FILE = 'data/train.tfrecords'
-TEST_FILE = 'data/test.tfrecords'
+TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
+TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 220
 EPOCHS = 300
 LEARNING_RATE = 1e-4
+
+
+def get_filepaths(dir):
+    walk = os.walk(dir)
+    filepaths = []
+    for x in walk:
+        filenames = x[2]
+        for filename in filenames:
+            filepath = os.path.join(dir, filename)
+            filepaths.append(filepath)
+    return filepaths
 
 
 def read_single_example(filename_queue):
@@ -36,7 +48,7 @@ def read_single_example(filename_queue):
     return image, label
 
 
-def inputs(filename, batch_size):
+def inputs(dir, batch_size):
     """Reads input data num_epochs times.
 
     Args:
@@ -55,7 +67,8 @@ def inputs(filename, batch_size):
       must be run using e.g. tf.train.start_queue_runners().
     """
     with tf.name_scope('input'):
-        filename_queue = tf.train.string_input_producer([filename], num_epochs=EPOCHS)
+        filepaths = get_filepaths(dir)
+        filename_queue = tf.train.string_input_producer(filepaths, num_epochs=EPOCHS)
 
         # Even when reading in multiple threads, share the filename
         # queue.
@@ -163,7 +176,7 @@ def show_image(images_eval):
 
 
 def get_all_records(FILE):
-    filename_queue = tf.train.string_input_producer([FILE], num_epochs=1)
+    filename_queue = tf.train.string_input_producer([FILE], num_epochs=1, shuffle=True)
     image, label = read_single_example(filename_queue)
     init_op = tf.group(tf.initialize_all_variables(),
                        tf.initialize_local_variables())
@@ -192,7 +205,7 @@ def train_CNN():
 
     with tf.Graph().as_default():
         x, y_, keep_prob, train_step, accuracy = build_CNN()
-        images, labels = inputs(TRAIN_FILE, batch_size=BATCH_SIZE)
+        images, labels = inputs(TFRECORDS_TRAIN_DIR, batch_size=BATCH_SIZE)
         #test_images, test_labels = inputs(TEST_FILE, batch_size=BATCH_SIZE)
 
         print("Starting session...")
@@ -226,7 +239,7 @@ def train_CNN():
             print("Ending training...")
             print("iter = %d" % iter)
         finally:
-            test_images, test_labels = get_all_records(TEST_FILE)
+            test_images, test_labels = get_all_records(TFRECORDS_TEST_DIR)
             test_accuracy = accuracy.eval(feed_dict={x: test_images, y_: test_labels, keep_prob: 1.0})
             print("Test accuracy %g" % test_accuracy)
             coord.request_stop()
@@ -234,77 +247,5 @@ def train_CNN():
         coord.join(threads)
         sess.close()
 
-#
-#
-# def build_FC():
-#     # Input images and labels.
-#     x = tf.placeholder(tf.float32, shape=[BATCH_SIZE, 3 * WIDTH * HEIGHT])
-#     y_ = tf.placeholder(tf.int32, shape=[BATCH_SIZE, LABEL_SIZE])
-#
-#     x_image = tf.reshape(x, [-1, WIDTH * HEIGHT * 3])
-#
-#     # 1st layer
-#     N1 = WIDTH * HEIGHT
-#     W_fc1 = weight_variable([WIDTH * HEIGHT * 3, N1])
-#     b_fc1 = bias_variable([N1])
-#
-#     h_fc1 = tf.nn.relu(tf.matmul(x_image, W_fc1) + b_fc1)
-#
-#     keep_prob = tf.placeholder(tf.float32)
-#     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
-#
-#     W_fc2 = weight_variable([N1, LABEL_SIZE])
-#     b_fc2 = bias_variable([LABEL_SIZE])
-#
-#     y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
-#
-#     # Define cost function
-#     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y_conv, y_))
-#     train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
-#     # train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(cross_entropy)
-#     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
-#     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-#     return x, y_, keep_prob, train_step, accuracy
-#
-#
-# def train_FC():
-#     with tf.Graph().as_default():
-#         x, y_, keep_prob, train_step, accuracy = build_CNN()
-#         images, labels = inputs(train=True, batch_size=BATCH_SIZE)
-#         test_images, test_labels = inputs(train=False, batch_size=BATCH_SIZE)
-#
-#         init_op = tf.group(tf.initialize_all_variables(), tf.initialize_local_variables())
-#         sess = tf.InteractiveSession()
-#
-#         sess.run(init_op)
-#         coord = tf.train.Coordinator()
-#         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-#
-#         epoch = 0
-#         print("Starting the training of fully connected network...")
-#         try:
-#             test_images_eval = test_images.eval()
-#             test_labels_eval = test_labels.eval()
-#             while not coord.should_stop():
-#                 images_eval = images.eval()
-#                 labels_eval = labels.eval()
-#
-#                 train_step.run(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 0.5})
-#                 if epoch % 1 == 0:
-#                     print("Epoch: %d" % epoch)
-#                     train_accuracy = accuracy.eval(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 0.5})
-#                     print("Training accuracy %g" % train_accuracy)
-#                     test_accuracy = accuracy.eval(feed_dict={x: test_images_eval, y_: test_labels_eval, keep_prob: 1.0})
-#                     print("Test accuracy %g" % test_accuracy)
-#                 epoch += 1
-#
-#         except tf.errors.OutOfRangeError:
-#             print("Ending training...")
-#         finally:
-#             coord.request_stop()
-#
-#         coord.join(threads)
-#         sess.close()
-
-
 train_CNN()
+#print(get_filepaths(TFRECORDS_TRAIN_DIR))
