@@ -58,35 +58,37 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
         coord.join(threads)
 
 
+def charfolder_to_tfrecords(label_dir, images, output_dir):
+    img_cnt = 0
+    image_files = []
+    labels = []
+    label_name = label_dir.split(os.sep)[2]
+    label = proj_constants.get_label_id(label_name)
+    master_filename = os.path.join(output_dir, label_name)
+    for img in images:
+        image_file = os.path.join(label_dir, img)
+        image_files.append(image_file)
+        labels.append(label)
+        if img_cnt != 0 and ((img_cnt + 1) % MAX_EXAMPLES_PER_FILE == 0 or (img_cnt == len(images) - 1)):
+            filename = master_filename + "_" + str(img_cnt + 1) + ".tfrecords"
+            print("Writing to: %s" % filename)
+            thr = threading.Thread(target=examples_to_tfrecords, args=(image_files, labels, filename), kwargs={})
+            thr.start()
+            image_files = []
+            labels = []
+        img_cnt += 1
+
+
 def datafolder_to_tfrecords(data_folder, output_dir):
     '''Retrieves image and label info from given data_folder and saves them to a tfrecords file'''
     walk = os.walk(data_folder)
     i = 0
     for x in walk:
-        img_cnt = 0
-        image_files = []
-        labels = []
         if i != 0:
             label_dir = x[0]
-            label_name = label_dir.split(os.sep)[2]
-            label = proj_constants.get_label_id(label_name)
-            master_filename = os.path.join(output_dir, label_name)
             images = x[2]
-            for img in images:
-                image_file = os.path.join(label_dir, img)
-                image_files.append(image_file)
-                labels.append(label)
-                if img_cnt != 0 and ((img_cnt+1) % MAX_EXAMPLES_PER_FILE == 0 or (img_cnt == len(images)-1)):
-                    filename = master_filename+"_"+str(img_cnt+1)+".tfrecords"
-                    print("Writing to: %s" % filename)
-                    thr = threading.Thread(target=examples_to_tfrecords, args=(image_files, labels, filename), kwargs={})
-                    thr.start()  # will run "foo"
-                    thr.is_alive()  # will return whether foo is running currently
-                    thr.join()  # will wait till "foo" is done
-                    #examples_to_tfrecords(image_files, labels, filename)
-                    image_files = []
-                    labels = []
-                img_cnt += 1
+            thr = threading.Thread(target=charfolder_to_tfrecords, args=(label_dir, images, output_dir), kwargs={})
+            thr.start()
         i += 1
 
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
