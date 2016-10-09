@@ -3,7 +3,6 @@ import proj_constants
 import tensorflow as tf
 import numpy as np
 
-
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
@@ -38,9 +37,6 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
         threads = tf.train.start_queue_runners(coord=coord)
 
         for i in xrange(len(image_files)):
-            if i % 100 == 0:
-                print "Writing tfrecord for image #: %d" %i
-
             image = decoded_img.eval()
             image = image*(1./255.)
             image_raw = image.tostring()
@@ -58,7 +54,7 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
         coord.join(threads)
 
 
-def datafolder_to_tfrecords(data_folder, tfrecords_file):
+def datafolder_to_tfrecords(data_folder, output_dir):
     '''Retrieves image and label info from given data_folder and saves them to a tfrecords file'''
     walk = os.walk(data_folder)
     i = 0
@@ -68,14 +64,21 @@ def datafolder_to_tfrecords(data_folder, tfrecords_file):
         if i!=0:
             label_dir = x[0]
             label_name = label_dir.split(os.sep)[2]
+            filename = os.path.join(output_dir, label_name + '.tfrecords')
+            if os.path.exists(filename):
+                print("%s is already present, so skipping to next character" % filename)
+                continue
             images = x[2]
             for img in images:
                 image_file = os.path.join(label_dir, img)
                 label = proj_constants.get_label_id(label_name)
                 image_files.append(image_file)
                 labels.append(label)
+            print("Writing to: %s" %filename)
+            examples_to_tfrecords(image_files, labels, filename)
         i+=1
-    examples_to_tfrecords(image_files, labels, tfrecords_file)
 
-datafolder_to_tfrecords(proj_constants.TRAIN_DIR, os.path.join(proj_constants.DATA_DIR, 'train.tfrecords'))
-datafolder_to_tfrecords(proj_constants.TEST_DIR, os.path.join(proj_constants.DATA_DIR, 'test.tfrecords'))
+TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
+TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
+datafolder_to_tfrecords(proj_constants.TRAIN_DIR, TFRECORDS_TRAIN_DIR)
+datafolder_to_tfrecords(proj_constants.TEST_DIR, TFRECORDS_TEST_DIR)
