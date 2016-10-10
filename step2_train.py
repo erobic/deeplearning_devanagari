@@ -11,8 +11,11 @@ from PIL import Image, ImageDraw, ImageFont
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 220
-EPOCHS = 300
+EPOCHS = 10
 LEARNING_RATE = 1e-3
+SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
+TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
+TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
 
 
 def get_filepaths(dir):
@@ -84,41 +87,54 @@ def build_CNN():
         accuracy: op to calculate accuracy of data
     """
     # Input images and labels
-    x = tf.placeholder(tf.float32, shape=[None, proj_constants.WIDTH * proj_constants.HEIGHT])
-    y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
-    x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
+    with tf.name_scope("Input"):
+        x = tf.placeholder(tf.float32, shape=[None, proj_constants.WIDTH * proj_constants.HEIGHT])
+        y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
+        x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
 
     # 1st layer
-    W_conv1 = weight_variable([5, 5, 1, 32])
-    b_conv1 = bias_variable([32])
-    h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-    h_pool1 = max_pool_2x2(h_conv1)
+    with tf.name_scope("Layer1"):
+        W_conv1 = weight_variable([5, 5, 1, 32])
+        b_conv1 = bias_variable([32])
+        h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+        h_pool1 = max_pool_2x2(h_conv1)
 
     # 2nd layer
-    W_conv2 = weight_variable([5, 5, 32, 64])
-    b_conv2 = bias_variable([64])
-    h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-    h_pool2 = max_pool_2x2(h_conv2)
+    with tf.name_scope("Layer2"):
+        W_conv2 = weight_variable([5, 5, 32, 64])
+        b_conv2 = bias_variable([64])
+        h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
+        h_pool2 = max_pool_2x2(h_conv2)
 
-    # image size would have reduced by a factor of 4. Of course we have to account for all the channels too
-    h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64])
+        # image size would have reduced by a factor of 4. Of course we have to account for all the channels too
+        h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64])
 
     # 3rd layer
-    W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64, 1024])
-    b_fc1 = bias_variable([1024])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
-    keep_prob = tf.placeholder(tf.float32)
-    h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+    with tf.name_scope("Layer3"):
+        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64, 1024])
+        b_fc1 = bias_variable([1024])
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+        keep_prob = tf.placeholder(tf.float32)
+        h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     # Final layer
-    W_fc2 = weight_variable([1024, proj_constants.CLASSES])
-    b_fc2 = bias_variable([proj_constants.CLASSES])
-    y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+    with tf.name_scope("Output"):
+        W_fc2 = weight_variable([1024, proj_constants.CLASSES])
+        b_fc2 = bias_variable([proj_constants.CLASSES])
+        y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-    cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.cast(y_, tf.float32) * tf.log(y_conv), reduction_indices=[1]))
-    train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
-    correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    with tf.name_scope("CrossEntropy"):
+        cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.cast(y_, tf.float32) * tf.log(y_conv), reduction_indices=[1]))
+        tf.scalar_summary("Cross Entropy", cross_entropy)
+
+    with tf.name_scope("Train"):
+        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
+
+    with tf.name_scope("CorrectPrediction"):
+        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
+
+    with tf.name_scope("Accuracy"):
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     return x, y_, keep_prob, train_step, accuracy
 
 
@@ -142,6 +158,7 @@ def read_all(dir):
         except tf.errors.OutOfRangeError, e:
             coord.request_stop(e)
         finally:
+
             coord.request_stop()
         coord.join(threads)
     return images, labels
@@ -174,28 +191,42 @@ def train_CNN():
         init_op = tf.group(tf.initialize_all_variables(),
                            tf.initialize_local_variables())
         sess = tf.InteractiveSession()
+        merge_summary = tf.merge_all_summaries()
+        train_writer = tf.train.SummaryWriter(TRAIN_SUMMARY_DIR, sess.graph)
+        test_writer = tf.train.SummaryWriter(TEST_SUMMARY_DIR)
+
         sess.run(init_op)
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-        iter = 0
+
+        print("Loading test data...")
+        test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
+        test_label_vectors = proj_constants.to_label_vectors(test_labels)
+        step_num = 0
+        print("Starting the training...")
         try:
             while not coord.should_stop():
                 images_eval, labels_eval = sess.run([images, labels])
                 label_vectors = proj_constants.to_label_vectors(labels_eval)
                 train_step.run(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 0.5})
-                if iter % 100 == 0:
-                    print("Iteration: %d" % iter)
-                    train_accuracy = accuracy.eval(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
-                    print("Training accuracy %g" % train_accuracy)
-                iter += 1
+
+                if step_num % 10 == 0:
+                    # Evaluate train accuracy every 10th step
+                    summary, train_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
+                    train_writer.add_summary(summary, step_num)
+                    print("Step: %d Training accuracy: %g" %(step_num, train_accuracy))
+
+                if step_num % 100 == 0:
+                    # Evaluate test accuracy every 100th step
+                    summary, test_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
+                    test_writer.add_summary(summary, step_num)
+                    print("Step: %d Test accuracy: %g" % (step_num, test_accuracy))
+
+                step_num += 1
         except tf.errors.OutOfRangeError:
             print("Ending training...")
-            print("iter = %d" % iter)
+            print("Total Steps = %d" % step_num)
         finally:
-            test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
-            test_label_vectors = proj_constants.to_label_vectors(test_labels)
-            test_accuracy = accuracy.eval(feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
-            print("Test accuracy %g" % test_accuracy)
             coord.request_stop()
 
         coord.join(threads)
