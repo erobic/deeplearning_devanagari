@@ -15,12 +15,6 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def to_label_vector(label_id):
-    vector = np.zeros(proj_constants.CLASSES)
-    vector[label_id] = 1
-    return vector
-
-
 def examples_to_tfrecords(image_files, labels, tfrecords_file):
     '''Saves image files and their labels into a single tfrecords file.
     Each record has "x" which is the gray-scale image having intensity values between 0 and 1
@@ -45,12 +39,12 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
             image = image*(1./255.)
             image_raw = image.tostring()
 
-            label_vector = to_label_vector(labels[i])
-            label_vector_raw = label_vector.tostring()
+            #label_vector = to_label_vector(labels[i])
+            #label_vector_raw = label_vector.tostring()
 
             example = tf.train.Example(features=tf.train.Features(feature={
                 'x': _bytes_feature(image_raw),
-                'y': _bytes_feature(label_vector_raw)
+                'y': _int64_feature(int(labels[i]))
             }))
             writer.write(example.SerializeToString())
 
@@ -71,7 +65,6 @@ def charfolder_to_tfrecords(label_dir, images, output_dir):
         labels.append(label)
         if img_cnt != 0 and ((img_cnt + 1) % MAX_EXAMPLES_PER_FILE == 0 or (img_cnt == len(images) - 1)):
             filename = master_filename + "_" + str(img_cnt + 1) + ".tfrecords"
-            print("Writing to: %s" % filename)
             thr = threading.Thread(target=examples_to_tfrecords, args=(image_files, labels, filename), kwargs={})
             thr.start()
             image_files = []
