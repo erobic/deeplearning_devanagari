@@ -8,18 +8,19 @@ MAX_EXAMPLES_PER_FILE = 5
 
 
 def _int64_feature(value):
+    """Converts value to a Int64List feature."""
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
 def _bytes_feature(value):
+    """Converts value to a BytesList feature"""
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
 def examples_to_tfrecords(image_files, labels, tfrecords_file):
-    '''Saves image files and their labels into a single tfrecords file.
+    """Saves image files and their labels into a single tfrecords file.
     Each record has "x" which is the gray-scale image having intensity values between 0 and 1
-    and "y" which is the vector with "CLASSES" no. of entries with all entries being 0 except the actual label
-    which is set to 1'''
+    and "y" which is an integer indicating the class of the image"""
     file_queue = tf.train.string_input_producer(image_files)
     reader = tf.WholeFileReader()
     key, value = reader.read(file_queue)
@@ -39,9 +40,6 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
             image = image*(1./255.)
             image_raw = image.tostring()
 
-            #label_vector = to_label_vector(labels[i])
-            #label_vector_raw = label_vector.tostring()
-
             example = tf.train.Example(features=tf.train.Features(feature={
                 'x': _bytes_feature(image_raw),
                 'y': _int64_feature(int(labels[i]))
@@ -53,6 +51,7 @@ def examples_to_tfrecords(image_files, labels, tfrecords_file):
 
 
 def charfolder_to_tfrecords(label_dir, images, output_dir):
+    """Creates tfrecords files which image, label records. Each tfrecord file has at most MAX_EXAMPLES_PER_FILE entries"""
     img_cnt = 0
     image_files = []
     labels = []
@@ -74,7 +73,7 @@ def charfolder_to_tfrecords(label_dir, images, output_dir):
 
 
 def datafolder_to_tfrecords(data_folder, output_dir):
-    '''Retrieves image and label info from given data_folder and saves them to a tfrecords file'''
+    """Retrieves image and label info from given data_folder and saves them to a tfrecords file"""
     walk = os.walk(data_folder)
     i = 0
     for x in walk:
