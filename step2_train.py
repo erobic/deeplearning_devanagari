@@ -4,10 +4,9 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as mpplot
 import os
-import matplotlib.image as mpimg
 import proj_constants
+from PIL import Image, ImageDraw, ImageFont
 
 # Constants used for dealing with the files, matches convert_to_records.
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
@@ -35,54 +34,26 @@ def read_single_example(filename_queue):
         serialized_example,
         features={
             'x': tf.FixedLenFeature([], tf.string),
-            'y': tf.FixedLenFeature([], tf.string),
+            'y': tf.FixedLenFeature([], tf.int64),
         })
 
     image = tf.decode_raw(features['x'], tf.float64)
     image = tf.cast(image, tf.float32)
     image.set_shape([proj_constants.WIDTH * proj_constants.HEIGHT])
 
-    label = tf.decode_raw(features['y'], tf.float64)
-    label = tf.cast(label, tf.int32)
-    label.set_shape([proj_constants.CLASSES])
+    # label = tf.decode_raw(features['y'], tf.float64)
+    label = tf.cast(features['y'], tf.int64)
+    # label.set_shape([proj_constants.CLASSES])
     return image, label
 
 
 def inputs(dir, batch_size):
-    """Reads input data num_epochs times.
-
-    Args:
-      train: Selects between the training (True) and validation (False) data.
-      batch_size: Number of examples per returned batch.
-      num_epochs: Number of times to read the input data, or 0/None to
-         train forever.
-
-    Returns:
-      A tuple (images, labels), where:
-      * images is a float tensor with shape [batch_size, image_size]
-        in the range [0, 1].
-      * labels is an int32 tensor with shape [batch_size] with the true label,
-        a number in the range [0, label_size).
-      Note that an tf.train.QueueRunner is added to the graph, which
-      must be run using e.g. tf.train.start_queue_runners().
-    """
-    with tf.name_scope('input'):
-        filepaths = get_filepaths(dir)
-        filename_queue = tf.train.string_input_producer(filepaths, num_epochs=EPOCHS)
-
-        # Even when reading in multiple threads, share the filename
-        # queue.
-        image, label = read_single_example(filename_queue)
-
-        # Shuffle the examples and collect them into batch_size batches.
-        # (Internally uses a RandomShuffleQueue.)
-        # We run this in two threads to avoid being a bottleneck.
-        image_batch, label_batch = tf.train.shuffle_batch(
-            [image, label], batch_size=batch_size, num_threads=2,
-            capacity=500 + 3 * batch_size,
-            # Ensures a minimum amount of shuffling of examples.
-            min_after_dequeue=500)
-        return image_batch, label_batch
+    filepaths = get_filepaths(dir)
+    filename_queue = tf.train.string_input_producer(filepaths, num_epochs=EPOCHS)
+    image, label = read_single_example(filename_queue)
+    image_batch, label_batch = tf.train.shuffle_batch(
+    [image, label], batch_size=batch_size, num_threads=4, capacity=500 + 3 * batch_size, min_after_dequeue=500)
+    return image_batch, label_batch
 
 
 def weight_variable(shape):
@@ -165,37 +136,46 @@ def build_CNN():
     return x, y_, keep_prob, train_step, accuracy
 
 
-def show_image(images_eval):
-    image = images_eval[20]
-    image = image * 255
-    image = np.reshape(image, (proj_constants.WIDTH, proj_constants.HEIGHT))
-    mpplot.imshow(image, cmap='gray')
-    mpplot.show()
-
-
-def get_all_records(FILE):
-    filename_queue = tf.train.string_input_producer([FILE], num_epochs=1, shuffle=True)
+def get_all_records(dir):
+    filepaths = get_filepaths(dir)
+    filename_queue = tf.train.string_input_producer(filepaths, num_epochs=1)
     image, label = read_single_example(filename_queue)
-    init_op = tf.group(tf.initialize_all_variables(),
-                       tf.initialize_local_variables())
-    sess = tf.InteractiveSession()
-    sess.run(init_op)
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
+    init_op = tf.group(tf.initialize_local_variables(), tf.initialize_all_variables())
     images = []
     labels = []
-    try:
-        while True:
-            images.append(image.eval())
-            labels.append(label.eval())
-    except tf.errors.OutOfRangeError, e:
-        coord.request_stop(e)
-
-    finally:
-        coord.request_stop()
+    with tf.Session() as sess:
+        sess.run(init_op)
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+        try:
+            while True:
+                curr_image, curr_label = sess.run([image, label])
+                images.append(curr_image)
+                labels.append(curr_label)
+        except tf.errors.OutOfRangeError, e:
+            coord.request_stop(e)
+        finally:
+            coord.request_stop()
         coord.join(threads)
-        sess.close()
     return images, labels
+
+
+def show_image(images_eval, labels_eval):
+    image = images_eval[1]
+    label = labels_eval[1]
+    image = image * 255
+    image = np.reshape(image, (proj_constants.WIDTH, proj_constants.HEIGHT))
+    im = Image.fromarray(image)
+    im.show()
+    print("label id = %d" % np.argmax(label))
+    print("label = %s" % proj_constants.get_label_name(np.argmax(label)))
+
+
+def show_all():
+    images, labels = get_all_records(TFRECORDS_TRAIN_DIR)
+
+    labels_eval = proj_constants.to_label_vectors(labels)
+    show_image(images, labels_eval)
 
 
 def train_CNN():
@@ -204,30 +184,21 @@ def train_CNN():
     with tf.Graph().as_default():
         x, y_, keep_prob, train_step, accuracy = build_CNN()
         images, labels = inputs(TFRECORDS_TRAIN_DIR, batch_size=BATCH_SIZE)
-        #test_images, test_labels = inputs(TEST_FILE, batch_size=BATCH_SIZE)
-
-        print("Starting session...")
         init_op = tf.group(tf.initialize_all_variables(),
                            tf.initialize_local_variables())
-
         sess = tf.InteractiveSession()
-        print("Initializing all variables...")
-
         sess.run(init_op)
-
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
         iter = 0
-        print("Starting the training of CNN...")
         try:
             while not coord.should_stop():
-                images_eval = images.eval()
-                labels_eval = labels.eval()
-                train_step.run(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 0.5})
+                images_eval, labels_eval = sess.run([images, labels])
+                label_vectors = proj_constants.to_label_vectors(labels_eval)
+                train_step.run(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 0.5})
                 if iter % 100 == 0:
                     print("Iteration: %d" % iter)
-                    train_accuracy = accuracy.eval(feed_dict={x: images_eval, y_: labels_eval, keep_prob: 1.0})
+                    train_accuracy = accuracy.eval(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
                     print("Training accuracy %g" % train_accuracy)
                 iter += 1
         except tf.errors.OutOfRangeError:
@@ -235,12 +206,15 @@ def train_CNN():
             print("iter = %d" % iter)
         finally:
             test_images, test_labels = get_all_records(TFRECORDS_TEST_DIR)
-            test_accuracy = accuracy.eval(feed_dict={x: test_images, y_: test_labels, keep_prob: 1.0})
+            test_label_vectors = proj_constants.to_label_vectors(test_labels)
+            test_accuracy = accuracy.eval(feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
             print("Test accuracy %g" % test_accuracy)
             coord.request_stop()
 
         coord.join(threads)
         sess.close()
 
+
 train_CNN()
-#print(get_filepaths(TFRECORDS_TRAIN_DIR))
+#show_all()
+# print(get_filepaths(TFRECORDS_TRAIN_DIR))
