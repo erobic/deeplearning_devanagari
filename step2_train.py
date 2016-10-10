@@ -210,13 +210,13 @@ def train_CNN():
                 label_vectors = proj_constants.to_label_vectors(labels_eval)
                 train_step.run(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 0.5})
 
-                if step_num % 10 == 0:
+                if step_num % 50 == 0:
                     # Evaluate train accuracy every 10th step
                     summary, train_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
                     train_writer.add_summary(summary, step_num)
                     print("Step: %d Training accuracy: %g" %(step_num, train_accuracy))
 
-                if step_num % 100 == 0:
+                if step_num % 400 == 0:
                     # Evaluate test accuracy every 100th step
                     summary, test_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
                     test_writer.add_summary(summary, step_num)
