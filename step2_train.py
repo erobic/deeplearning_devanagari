@@ -216,7 +216,7 @@ def train_CNN():
                     train_writer.add_summary(summary, step_num)
                     print("Step: %d Training accuracy: %g" %(step_num, train_accuracy))
 
-                if step_num % 400 == 0:
+                if step_num % 1000 == 0:
                     # Evaluate test accuracy every 100th step
                     summary, test_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
                     test_writer.add_summary(summary, step_num)
