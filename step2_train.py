@@ -51,7 +51,7 @@ def read_batches(dir, batch_size):
     filename_queue = tf.train.string_input_producer(filepaths, num_epochs=EPOCHS)
     image, label = read_single_example(filename_queue)
     image_batch, label_batch = tf.train.shuffle_batch(
-    [image, label], batch_size=batch_size, num_threads=4, capacity=1000 + 3 * batch_size, min_after_dequeue=1900)
+    [image, label], batch_size=batch_size, num_threads=4, capacity=1000 + 3 * batch_size, min_after_dequeue=1000)
     return image_batch, label_batch
 
 
