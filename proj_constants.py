@@ -1,4 +1,6 @@
 import os
+import numpy as np
+
 WIDTH = 32
 HEIGHT = 32
 CLASSES = 46
@@ -42,4 +44,18 @@ def get_label_id(class_name):
 
 def get_label_name(class_id):
     '''Gets name of the class corresponding to given class id'''
-    return LABEL_ID_TO_NAME.get(class_id)
+    return LABEL_ID_TO_NAME.get(str(class_id))
+
+
+def to_label_vector(label_id):
+    vector = np.zeros(CLASSES)
+    vector[int(label_id)] = 1
+    return vector
+
+
+def to_label_vectors(label_ids):
+    label_vectors = []
+    for i in xrange(len(label_ids)):
+        label_vector = to_label_vector(label_ids[i])
+        label_vectors.append(label_vector)
+    return label_vectors
