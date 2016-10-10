@@ -65,6 +65,7 @@ def charfolder_to_tfrecords(label_dir, images, output_dir):
         labels.append(label)
         if img_cnt != 0 and ((img_cnt + 1) % MAX_EXAMPLES_PER_FILE == 0 or (img_cnt == len(images) - 1)):
             filename = master_filename + "_" + str(img_cnt + 1) + ".tfrecords"
+            print("Writing to: %s" %filename)
             thr = threading.Thread(target=examples_to_tfrecords, args=(image_files, labels, filename), kwargs={})
             thr.start()
             image_files = []
