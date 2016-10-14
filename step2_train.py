@@ -16,7 +16,8 @@ LEARNING_RATE = 1e-3
 SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
-
+MIN_ACCURACY = 0.02
+SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model.ckpt")
 
 def get_filepaths(dir):
     """Gets filepaths for all files within given directory"""
@@ -58,13 +59,13 @@ def read_batches(dir, batch_size):
     return image_batch, label_batch
 
 
-def weight_variable(shape):
-    initial = tf.truncated_normal(shape, stddev=0.1)
+def weight_variable(shape, name):
+    initial = tf.truncated_normal(shape, stddev=0.1, name=name)
     return tf.Variable(initial)
 
 
-def bias_variable(shape):
-    initial = tf.constant(0.1, shape=shape)
+def bias_variable(shape, name):
+    initial = tf.constant(0.1, shape=shape, name=name)
     return tf.Variable(initial)
 
 
@@ -91,25 +92,25 @@ def build_CNN():
         accuracy: op to calculate accuracy of data
     """
     # Input images and labels
-    with tf.name_scope("Input"):
+    with tf.name_scope("input"):
         x = tf.placeholder(tf.float32, shape=[None, proj_constants.WIDTH * proj_constants.HEIGHT])
         y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
         x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
 
     # 1st layer
-    with tf.name_scope("ConvLayer1"):
+    with tf.name_scope("conv_1"):
         layer1_maps = 32
-        W_conv1 = weight_variable([5, 5, 1, layer1_maps])
-        b_conv1 = bias_variable([layer1_maps])
+        W_conv1 = weight_variable([5, 5, 1, layer1_maps], name="weight_conv_1")
+        b_conv1 = bias_variable([layer1_maps], name="bias_conv_1")
         h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
         h_norm1 = local_response_normaliztion(h_conv1)
         h_pool1 = max_pool_2x2(h_norm1)
 
     # 2nd layer
-    with tf.name_scope("ConvLayer2"):
+    with tf.name_scope("conv_2"):
         layer2_maps = 64
-        W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps])
-        b_conv2 = bias_variable([layer2_maps])
+        W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps], name="weight_conv_2")
+        b_conv2 = bias_variable([layer2_maps], name="bias_conv_2")
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
         h_norm2 = local_response_normaliztion(h_conv2)
         h_pool2 = max_pool_2x2(h_norm2)
@@ -118,33 +119,34 @@ def build_CNN():
         h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps])
 
     # 3rd layer
-    with tf.name_scope("FullyConnectedLayer1"):
+    with tf.name_scope("fully_connected_1"):
         fc1_size = 1024
-        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps, fc1_size])
-        b_fc1 = bias_variable([fc1_size])
+        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps,
+                                 fc1_size], name="weight_fully_connected_1")
+        b_fc1 = bias_variable([fc1_size], name="bias_fully_connected_1")
         h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
         keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     # Final layer
-    with tf.name_scope("Softmax"):
-        W_fc2 = weight_variable([fc1_size, proj_constants.CLASSES])
-        b_fc2 = bias_variable([proj_constants.CLASSES])
+    with tf.name_scope("softmax_1"):
+        W_fc2 = weight_variable([fc1_size, proj_constants.CLASSES], "weight_softmax_1")
+        b_fc2 = bias_variable([proj_constants.CLASSES], "bias_softmax_1")
         y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-    with tf.name_scope("CrossEntropy"):
+    with tf.name_scope("cross_entropy"):
         cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.cast(y_, tf.float32) * tf.log(y_conv), reduction_indices=[1]))
         tf.scalar_summary("Cross Entropy", cross_entropy)
 
-    with tf.name_scope("Train"):
+    with tf.name_scope("train"):
         train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
 
-    with tf.name_scope("CorrectPrediction"):
+    with tf.name_scope("correct_prediction"):
         correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
 
-    with tf.name_scope("Accuracy"):
+    with tf.name_scope("accuracy"):
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-        tf.scalar_summary("Accuracy", accuracy)
+        tf.scalar_summary("accuracy", accuracy)
 
     return x, y_, keep_prob, train_step, accuracy
 
@@ -195,9 +197,13 @@ def show_all():
 
 
 def train_CNN():
+    curr_accuracy = 0
     """Trains CNN. Prints out accuracy every 100 steps. Prints out test accuracy at the end."""
     with tf.Graph().as_default():
+        # Build the CNN
         x, y_, keep_prob, train_step, accuracy = build_CNN()
+
+        # Create and initialize the ops
         images, labels = read_batches(TFRECORDS_TRAIN_DIR, batch_size=BATCH_SIZE)
         init_op = tf.group(tf.initialize_all_variables(),
                            tf.initialize_local_variables())
@@ -205,15 +211,21 @@ def train_CNN():
         merge_summary = tf.merge_all_summaries()
         train_writer = tf.train.SummaryWriter(TRAIN_SUMMARY_DIR, sess.graph)
         test_writer = tf.train.SummaryWriter(TEST_SUMMARY_DIR)
-
+        model_saver = tf.train.Saver()
         sess.run(init_op)
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        # Restore model if a checkpoint is found
+        if os.path.exists(SAVE_PATH):
+            print("Previous checkpoint found. Restoring the model...")
+            model_saver.restore(sess, SAVE_PATH)
 
         print("Loading test data...")
         test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
         test_label_vectors = proj_constants.to_label_vectors(test_labels)
         step_num = 0
+
         print("Starting the training...")
         try:
             while not coord.should_stop():
@@ -227,11 +239,16 @@ def train_CNN():
                     train_writer.add_summary(summary, step_num)
                     print("Step: %d Training accuracy: %g" %(step_num, train_accuracy))
 
-                if step_num % 1000 == 0:
+                if step_num % 500 == 0:
                     # Evaluate test accuracy every 100th step
                     summary, test_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: test_images, y_: test_label_vectors, keep_prob: 1.0})
                     test_writer.add_summary(summary, step_num)
                     print("Step: %d Test accuracy: %g" % (step_num, test_accuracy))
+
+                    if test_accuracy > MIN_ACCURACY and test_accuracy > curr_accuracy:
+                        print("Saving the model...")
+                        saved_path = model_saver.save(sess, SAVE_PATH)
+                        print("Saved the model in file: %s" % saved_path)
 
                 step_num += 1
         except tf.errors.OutOfRangeError:
