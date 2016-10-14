@@ -10,13 +10,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
-BATCH_SIZE = 220
-EPOCHS = 10
-LEARNING_RATE = 1e-3
+BATCH_SIZE = 120
+EPOCHS = 100
+LEARNING_RATE = 8e-4
 SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
-MIN_ACCURACY = 97
+MIN_ACCURACY = 0.97
 SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model.ckpt")
 
 
@@ -98,7 +98,6 @@ def build_CNN():
         y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
         x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
 
-    # 1st layer
     with tf.name_scope("conv_1"):
         layer1_maps = 16
         W_conv1 = weight_variable([5, 5, 1, layer1_maps], name="weight_conv_1")
@@ -107,16 +106,13 @@ def build_CNN():
         h_norm1 = local_response_normaliztion(h_conv1)
         h_pool1 = max_pool_2x2(h_norm1)
 
-    # 2nd layer
     with tf.name_scope("conv_2"):
-        layer2_maps = 16
+        layer2_maps = 32
         W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps], name="weight_conv_2")
         b_conv2 = bias_variable([layer2_maps], name="bias_conv_2")
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
         h_norm2 = local_response_normaliztion(h_conv2)
         h_pool2 = max_pool_2x2(h_norm2)
-        ##
-
 
     with tf.name_scope("conv_3"):
         layer3_maps = 32
@@ -137,7 +133,6 @@ def build_CNN():
         h_pool4_flat = tf.reshape(h_pool4, [-1, int(proj_constants.WIDTH / image_reduction_factor) *
                                         int(proj_constants.HEIGHT / image_reduction_factor) * layer4_maps])
 
-    # 3rd layer
     with tf.name_scope("fully_connected_1"):
         fc1_size = 1024
         W_fc1 = weight_variable([int(proj_constants.WIDTH / image_reduction_factor)
@@ -148,7 +143,6 @@ def build_CNN():
         keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-    # Final layer
     with tf.name_scope("softmax_1"):
         W_fc2 = weight_variable([fc1_size, proj_constants.CLASSES], "weight_softmax_1")
         b_fc2 = bias_variable([proj_constants.CLASSES], "bias_softmax_1")
@@ -217,7 +211,7 @@ def show_all():
 
 
 def train_CNN():
-    curr_accuracy = 0
+    highest_accuracy = 0
     """Trains CNN. Prints out accuracy every 100 steps. Prints out test accuracy at the end."""
     with tf.Graph().as_default():
         # Build the CNN
@@ -265,10 +259,11 @@ def train_CNN():
                     test_writer.add_summary(summary, step_num)
                     print("Step: %d Test accuracy: %g" % (step_num, test_accuracy))
 
-                    if test_accuracy > MIN_ACCURACY and test_accuracy > curr_accuracy:
+                    if test_accuracy > MIN_ACCURACY and test_accuracy > highest_accuracy:
                         print("Saving the model...")
                         saved_path = model_saver.save(sess, SAVE_PATH)
                         print("Saved the model in file: %s" % saved_path)
+                        highest_accuracy = test_accuracy
 
                 step_num += 1
         except tf.errors.OutOfRangeError:
