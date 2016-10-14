@@ -97,35 +97,38 @@ def build_CNN():
         x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
 
     # 1st layer
-    with tf.name_scope("Layer1"):
-        W_conv1 = weight_variable([5, 5, 1, 32])
-        b_conv1 = bias_variable([32])
+    with tf.name_scope("ConvLayer1"):
+        layer1_maps = 32
+        W_conv1 = weight_variable([5, 5, 1, layer1_maps])
+        b_conv1 = bias_variable([layer1_maps])
         h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
         h_norm1 = local_response_normaliztion(h_conv1)
         h_pool1 = max_pool_2x2(h_norm1)
 
     # 2nd layer
-    with tf.name_scope("Layer2"):
-        W_conv2 = weight_variable([5, 5, 32, 64])
-        b_conv2 = bias_variable([64])
+    with tf.name_scope("ConvLayer2"):
+        layer2_maps = 64
+        W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps])
+        b_conv2 = bias_variable([layer2_maps])
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-        h_pool2 = max_pool_2x2(h_conv2)
         h_norm2 = local_response_normaliztion(h_conv2)
+        h_pool2 = max_pool_2x2(h_norm2)
 
         # image size would have reduced by a factor of 4. Of course we have to account for all the channels too
-        h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64])
+        h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps])
 
     # 3rd layer
-    with tf.name_scope("Layer3"):
-        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64, 1024])
-        b_fc1 = bias_variable([1024])
+    with tf.name_scope("FullyConnectedLayer1"):
+        fc1_size = 1024
+        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps, fc1_size])
+        b_fc1 = bias_variable([fc1_size])
         h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
         keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     # Final layer
-    with tf.name_scope("Output"):
-        W_fc2 = weight_variable([1024, proj_constants.CLASSES])
+    with tf.name_scope("Softmax"):
+        W_fc2 = weight_variable([fc1_size, proj_constants.CLASSES])
         b_fc2 = bias_variable([proj_constants.CLASSES])
         y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
@@ -141,6 +144,8 @@ def build_CNN():
 
     with tf.name_scope("Accuracy"):
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        tf.scalar_summary("Accuracy", accuracy)
+
     return x, y_, keep_prob, train_step, accuracy
 
 
