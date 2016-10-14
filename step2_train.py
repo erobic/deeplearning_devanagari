@@ -76,6 +76,10 @@ def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
 
 
+def local_response_normaliztion(x):
+    return tf.nn.local_response_normalization(x)
+
+
 def build_CNN():
     """Builds a conv net to train the model
 
@@ -97,7 +101,8 @@ def build_CNN():
         W_conv1 = weight_variable([5, 5, 1, 32])
         b_conv1 = bias_variable([32])
         h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-        h_pool1 = max_pool_2x2(h_conv1)
+        h_norm1 = local_response_normaliztion(h_conv1)
+        h_pool1 = max_pool_2x2(h_norm1)
 
     # 2nd layer
     with tf.name_scope("Layer2"):
@@ -105,6 +110,7 @@ def build_CNN():
         b_conv2 = bias_variable([64])
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
         h_pool2 = max_pool_2x2(h_conv2)
+        h_norm2 = local_response_normaliztion(h_conv2)
 
         # image size would have reduced by a factor of 4. Of course we have to account for all the channels too
         h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * 64])
