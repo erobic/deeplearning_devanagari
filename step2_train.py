@@ -16,7 +16,7 @@ LEARNING_RATE = 1e-3
 SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
-MIN_ACCURACY = 0.02
+MIN_ACCURACY = 97
 SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model.ckpt")
 
 def get_filepaths(dir):
