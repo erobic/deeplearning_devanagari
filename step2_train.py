@@ -12,7 +12,7 @@ TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train'
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 220
 EPOCHS = 10
-LEARNING_RATE = 3e-3
+LEARNING_RATE = 1e-3
 SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
@@ -100,7 +100,7 @@ def build_CNN():
 
     # 1st layer
     with tf.name_scope("conv_1"):
-        layer1_maps = 32
+        layer1_maps = 16
         W_conv1 = weight_variable([5, 5, 1, layer1_maps], name="weight_conv_1")
         b_conv1 = bias_variable([layer1_maps], name="bias_conv_1")
         h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
@@ -109,15 +109,17 @@ def build_CNN():
 
     # 2nd layer
     with tf.name_scope("conv_2"):
-        layer2_maps = 64
+        layer2_maps = 16
         W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps], name="weight_conv_2")
         b_conv2 = bias_variable([layer2_maps], name="bias_conv_2")
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
         h_norm2 = local_response_normaliztion(h_conv2)
         h_pool2 = max_pool_2x2(h_norm2)
+        ##
+
 
     with tf.name_scope("conv_3"):
-        layer3_maps = 64
+        layer3_maps = 32
         W_conv3 = weight_variable([5, 5, layer2_maps, layer3_maps], name="weight_conv_3")
         b_conv3 = bias_variable([layer3_maps], name="bias_conv_3")
         h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
@@ -125,7 +127,7 @@ def build_CNN():
         h_pool3 = max_pool_2x2(h_norm3)
 
     with tf.name_scope("conv_4"):
-        layer4_maps = 128
+        layer4_maps = 64
         W_conv4 = weight_variable([5, 5, layer3_maps, layer4_maps], name="weight_conv_4")
         b_conv4 = bias_variable([layer4_maps], name="bias_conv_4")
         h_conv4 = tf.nn.relu(conv2d(h_pool3, W_conv4) + b_conv4)
@@ -251,7 +253,7 @@ def train_CNN():
                 label_vectors = proj_constants.to_label_vectors(labels_eval)
                 train_step.run(feed_dict={x: images_eval, y_: label_vectors, keep_prob: 0.5})
 
-                if step_num % 50 == 0:
+                if step_num % 20 == 0:
                     # Evaluate train accuracy every 10th step
                     summary, train_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
                     train_writer.add_summary(summary, step_num)
