@@ -12,12 +12,13 @@ TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train'
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 220
 EPOCHS = 10
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 3e-3
 SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
 MIN_ACCURACY = 97
 SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model.ckpt")
+
 
 def get_filepaths(dir):
     """Gets filepaths for all files within given directory"""
@@ -115,16 +116,33 @@ def build_CNN():
         h_norm2 = local_response_normaliztion(h_conv2)
         h_pool2 = max_pool_2x2(h_norm2)
 
-        # image size would have reduced by a factor of 4. Of course we have to account for all the channels too
-        h_pool2_flat = tf.reshape(h_pool2, [-1, int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps])
+    with tf.name_scope("conv_3"):
+        layer3_maps = 64
+        W_conv3 = weight_variable([5, 5, layer2_maps, layer3_maps], name="weight_conv_3")
+        b_conv3 = bias_variable([layer3_maps], name="bias_conv_3")
+        h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
+        h_norm3 = local_response_normaliztion(h_conv3)
+        h_pool3 = max_pool_2x2(h_norm3)
+
+    with tf.name_scope("conv_4"):
+        layer4_maps = 128
+        W_conv4 = weight_variable([5, 5, layer3_maps, layer4_maps], name="weight_conv_4")
+        b_conv4 = bias_variable([layer4_maps], name="bias_conv_4")
+        h_conv4 = tf.nn.relu(conv2d(h_pool3, W_conv4) + b_conv4)
+        h_norm4 = local_response_normaliztion(h_conv4)
+        h_pool4 = max_pool_2x2(h_norm4)
+        image_reduction_factor = 16
+        h_pool4_flat = tf.reshape(h_pool4, [-1, int(proj_constants.WIDTH / image_reduction_factor) *
+                                        int(proj_constants.HEIGHT / image_reduction_factor) * layer4_maps])
 
     # 3rd layer
     with tf.name_scope("fully_connected_1"):
         fc1_size = 1024
-        W_fc1 = weight_variable([int(proj_constants.WIDTH / 4) * int(proj_constants.HEIGHT / 4) * layer2_maps,
-                                 fc1_size], name="weight_fully_connected_1")
+        W_fc1 = weight_variable([int(proj_constants.WIDTH / image_reduction_factor)
+                                 * int(proj_constants.HEIGHT / image_reduction_factor) * layer4_maps, fc1_size],
+                                name="weight_fully_connected_1")
         b_fc1 = bias_variable([fc1_size], name="bias_fully_connected_1")
-        h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool4_flat, W_fc1) + b_fc1)
         keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
