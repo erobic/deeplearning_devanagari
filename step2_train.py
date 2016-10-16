@@ -17,7 +17,7 @@ SUMMARIES_DIR = os.path.join(proj_constants.DATA_DIR, 'summary')
 TRAIN_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'train')
 TEST_SUMMARY_DIR = os.path.join(SUMMARIES_DIR, 'test')
 MIN_ACCURACY = 0.97
-SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model.ckpt")
+SAVE_PATH = os.path.join(proj_constants.DATA_DIR, "model_cnn_with_shortcut.ckpt")
 
 
 def get_filepaths(dir):
