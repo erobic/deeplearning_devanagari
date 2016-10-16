@@ -490,9 +490,9 @@ def train_CNN():
             print("Previous checkpoint found. Restoring the model...")
             model_saver.restore(sess, SAVE_PATH)
 
-        # print("Loading test data...")
-        # test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
-        # test_label_vectors = proj_constants.to_label_vectors(test_labels)
+        print("Loading test data...")
+        test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
+        test_label_vectors = proj_constants.to_label_vectors(test_labels)
         step_num = 0
 
         print("Starting the training...")
