@@ -369,13 +369,108 @@ def build_ResNet():
     return x, y_, keep_prob, train_step, accuracy
 
 
+def build_CNN_with_ResNet():
+    """Builds a conv net to train the model
+
+    Returns:
+        x: placeholder for input images
+        y_: placeholder for actual labels
+        keep_prob: dropout parameter (1 = no dropout)
+        train_step: Optimizer to train the model
+        accuracy: op to calculate accuracy of data
+    """
+    reduction_factor = 1
+    # Input images and labels
+    with tf.name_scope("input"):
+        x = tf.placeholder(tf.float32, shape=[None, proj_constants.WIDTH * proj_constants.HEIGHT])
+        y_ = tf.placeholder(tf.int32, shape=[None, proj_constants.CLASSES])
+        x_image = tf.reshape(x, [-1, proj_constants.WIDTH, proj_constants.HEIGHT, 1])
+
+    with tf.name_scope("conv_1"):
+        layer1_maps = 32
+        W_conv1 = weight_variable([5, 5, 1, layer1_maps], name="weight_conv_1")
+        b_conv1 = bias_variable([layer1_maps], name="bias_conv_1")
+        h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+        h_norm1 = local_response_normaliztion(h_conv1)
+        h_pool1 = max_pool_2x2(h_norm1)
+        output_1 = h_pool1
+        reduction_factor *= 2
+
+    with tf.name_scope("conv_2"):
+        layer2_maps = 32
+        W_conv2 = weight_variable([5, 5, layer1_maps, layer2_maps], name="weight_conv_2")
+        b_conv2 = bias_variable([layer2_maps], name="bias_conv_2")
+        h_conv2 = tf.nn.relu(conv2d(output_1, W_conv2) + b_conv2)
+        h_norm2 = local_response_normaliztion(h_conv2)
+        output_2 = h_norm2
+        #h_pool2 = max_pool_2x2(h_norm2)
+        #reduction_factor *= 2
+
+    with tf.name_scope("conv_3"):
+        layer3_maps = 32
+        W_conv3 = weight_variable([5, 5, layer2_maps, layer3_maps], name="weight_conv_3")
+        b_conv3 = bias_variable([layer3_maps], name="bias_conv_3")
+        h_conv3 = tf.nn.relu(conv2d(output_2, W_conv3) + b_conv3)
+        h_norm3 = local_response_normaliztion(h_conv3)
+        output_3 = h_norm3
+        #h_pool3 = max_pool_2x2(h_norm3)
+        #reduction_factor *= 2
+
+    with tf.name_scope("sum"):
+        sum_1 = output_1 + output_3
+
+    with tf.name_scope("conv_4"):
+        layer4_maps = 64
+        W_conv4 = weight_variable([5, 5, layer3_maps, layer4_maps], name="weight_conv_4")
+        b_conv4 = bias_variable([layer4_maps], name="bias_conv_4")
+        h_conv4 = tf.nn.relu(conv2d(sum_1, W_conv4) + b_conv4)
+        h_norm4 = local_response_normaliztion(h_conv4)
+        h_pool4 = max_pool_2x2(h_norm4)
+        reduction_factor *= 2
+        h_pool4_flat = tf.reshape(h_pool4, [-1, int(proj_constants.WIDTH / reduction_factor) *
+                                        int(proj_constants.HEIGHT / reduction_factor) * layer4_maps])
+
+    with tf.name_scope("fully_connected_1"):
+        fc1_size = 1024
+        W_fc1 = weight_variable([int(proj_constants.WIDTH / reduction_factor)
+                                 * int(proj_constants.HEIGHT / reduction_factor) * layer4_maps, fc1_size],
+                                name="weight_fully_connected_1")
+        b_fc1 = bias_variable([fc1_size], name="bias_fully_connected_1")
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool4_flat, W_fc1) + b_fc1)
+        keep_prob = tf.placeholder(tf.float32)
+        h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+    with tf.name_scope("softmax_1"):
+        W_fc2 = weight_variable([fc1_size, proj_constants.CLASSES], "weight_softmax_1")
+        b_fc2 = bias_variable([proj_constants.CLASSES], "bias_softmax_1")
+        y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+
+    with tf.name_scope("cross_entropy"):
+        cross_entropy = tf.reduce_mean(-tf.reduce_sum(tf.cast(y_, tf.float32) * tf.log(y_conv), reduction_indices=[1]))
+        tf.scalar_summary("Cross Entropy", cross_entropy)
+
+    with tf.name_scope("train"):
+        train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(cross_entropy)
+
+    with tf.name_scope("correct_prediction"):
+        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
+
+    with tf.name_scope("accuracy"):
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        tf.scalar_summary("accuracy", accuracy)
+
+    return x, y_, keep_prob, train_step, accuracy
+
+
+
 def train_CNN():
     highest_accuracy = 0
     """Trains CNN. Prints out accuracy every 100 steps. Prints out test accuracy at the end."""
     with tf.Graph().as_default():
         # Build the CNN
         #x, y_, keep_prob, train_step, accuracy = build_CNN()
-        x, y_, keep_prob, train_step, accuracy = build_ResNet()
+        #x, y_, keep_prob, train_step, accuracy = build_ResNet()
+        x, y_, keep_prob, train_step, accuracy = build_CNN_with_ResNet()
 
         # Create and initialize the ops
         images, labels = read_batches(TFRECORDS_TRAIN_DIR, batch_size=BATCH_SIZE)
@@ -395,9 +490,9 @@ def train_CNN():
             print("Previous checkpoint found. Restoring the model...")
             model_saver.restore(sess, SAVE_PATH)
 
-        print("Loading test data...")
-        test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
-        test_label_vectors = proj_constants.to_label_vectors(test_labels)
+        # print("Loading test data...")
+        # test_images, test_labels = read_all(TFRECORDS_TEST_DIR)
+        # test_label_vectors = proj_constants.to_label_vectors(test_labels)
         step_num = 0
 
         print("Starting the training...")
@@ -424,6 +519,8 @@ def train_CNN():
                         saved_path = model_saver.save(sess, SAVE_PATH)
                         print("Saved the model in file: %s" % saved_path)
                         highest_accuracy = test_accuracy
+                    train_writer.flush()
+                    test_writer.flush()
 
                 step_num += 1
         except tf.errors.OutOfRangeError:
