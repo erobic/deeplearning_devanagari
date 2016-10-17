@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train')
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 128
-EPOCHS = 100
+EPOCHS = 20
 LEARNING_RATE = 8e-4
 MIN_ACCURACY = 0.96
 
