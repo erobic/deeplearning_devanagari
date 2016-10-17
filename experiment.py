@@ -374,8 +374,9 @@ class Resnet_4_8_4_16k_4c:
 def train(model):
 
     with tf.Graph().as_default():
-        run_name, x, y_, keep_prob, train_step, accuracy = model.build()
-        init_paths(run_name)
+        model_name, x, y_, keep_prob, train_step, accuracy = model.build()
+        print("Training with model: %s" %model_name)
+        init_paths(model_name)
         highest_accuracy = 0
         # Create and initialize the ops
         images, labels = read_batches(TFRECORDS_TRAIN_DIR, batch_size=BATCH_SIZE)
