@@ -13,7 +13,7 @@ TFRECORDS_TRAIN_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'train'
 TFRECORDS_TEST_DIR = os.path.join(proj_constants.DATA_DIR, 'tfrecords', 'test')
 BATCH_SIZE = 128
 EPOCHS = 50
-LEARNING_RATE = 3e-4
+LEARNING_RATE = 1e-4
 MIN_ACCURACY = 0.96
 
 SUMMARIES_DIR = ""
@@ -739,7 +739,7 @@ class Normal_paper():
 
         return "Normal_paper", x, y_, keep_prob, train_step, accuracy
 
-class Normal_8_8_8_16_paper():
+class Normal_4_16_16_32():
     def build(self):
         reduction_factor = 1
         # Input images and labels
@@ -824,7 +824,7 @@ class Normal_8_8_8_16_paper():
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
             tf.scalar_summary("accuracy", accuracy)
 
-        return "Normal_8_8_8_16_paper", x, y_, keep_prob, train_step, accuracy
+        return "Normal_4_16_16_32", x, y_, keep_prob, train_step, accuracy
 
 
 def train(model):
@@ -899,4 +899,4 @@ load_test_data()
 # train(Normal_8_8_8_8_8_16k_6c())
 # train(Normal_8_8_16_16_16_32k_6c_with_pool())
 # train(Normal_paper())
-train(Normal_8_8_8_16_paper())
+train(Normal_4_16_16_32())
