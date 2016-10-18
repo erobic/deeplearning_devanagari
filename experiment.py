@@ -866,6 +866,9 @@ def train(model):
                     summary, train_accuracy = sess.run([merge_summary, accuracy], feed_dict={x: images_eval, y_: label_vectors, keep_prob: 1.0})
                     train_writer.add_summary(summary, step_num)
                     print("Step: %d Training accuracy: %g" % (step_num, train_accuracy))
+                    if step_num > 1000 and train_accuracy < 0.01:
+                        print("Model has overshoot, ending the training...")
+                        break
 
                 if step_num % 200 == 0:
                     # Evaluate test accuracy every 100th step
@@ -884,8 +887,9 @@ def train(model):
                 step_num += 1
         except tf.errors.OutOfRangeError:
             print("Ending training...")
-            print("Total Steps = %d" % step_num)
+
         finally:
+            print("At the end of training, Total Steps = %d" % step_num)
             coord.request_stop()
             train_writer.flush()
             test_writer.flush()
